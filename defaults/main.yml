@@ -154,6 +154,7 @@ postgresql_authentication_timeout: 60s # 1s-600s
 postgresql_password_encryption: "{{ 'scram-sha-256' if postgresql_version is version_compare('14', '>=') else 'md5' }}" # (>=14.0 set to scram-sha-256 for best security)
 posgresql_scram_iterations: 4096 # (>= 16)
 postgresql_db_user_namespace: off
+postgresql_md5_password_warnings: on # (>= 17)
 
 # GSSAPI using Kerberos
 postgresql_krb_server_keyfile: "{{ 'FILE:${sysconfdir}/krb5.keytab' if postgresql_version is version_compare('14', '>=') else '' }}"
@@ -171,6 +172,7 @@ postgresql_ssl_ciphers:
   - "!aNULL"
 postgresql_ssl_prefer_server_ciphers: on
 postgresql_ssl_ecdh_curve: "prime256v1"
+postgresql_ssl_groups: "prime256v1"                                   # (>= 17)
 postgresql_ssl_min_protocol_version: "TLSv1.2"                      # (>= 12)
 postgresql_ssl_max_protocol_version: ""                             # (>= 12)
 postgresql_ssl_dh_params_file: ""                                   # (>= 10)
@@ -213,15 +215,24 @@ postgresql_dynamic_shared_memory_type: "posix"  # the default is the first optio
                                                 #   mmap
                                                 # use none to disable dynamic shared memory
 postgresql_min_dynamic_shared_memory: 0MB       # (>= 14) (change requires restart)
-postgres_vacuum_buffer_usage_limit: 256kB       # (>= 16) size of vacuum and analyze buffer access strategy ring;
+postgresql_vacuum_buffer_usage_limit: 256kB     # (>= 16) size of vacuum and analyze buffer access strategy ring;
                                                 # 0 to disable vacuum buffer access strategy;
                                                 # range 128kB to 16GB
+
+
+postgresql_commit_timestamp_buffers: 0    # (>= 17) memory for pg_commit_ts (0 = auto)
+postgresql_multixact_offset_buffers: 16   # (>= 17) memory for pg_multixact/offsets
+postgresql_multixact_member_buffers: 32   # (>= 17) memory for pg_multixact/members
+postgresql_notify_buffers: 16             # (>= 17) memory for pg_notify
+postgresql_serializable_buffers: 32       # (>= 17) memory for pg_serial
+postgresql_subtransaction_buffers: 0      # (>= 17) memory for pg_subtrans (0 = auto)
+postgresql_transaction_buffers: 0         # (>= 17) memory for pg_xact (0 = auto)
 
 # - Disk -
 
 # limits per-process temp file space in kB, or -1 for no limit (>= 9.2)
 postgresql_temp_file_limit: -1
-
+postgresql_max_notify_queue_pages: 1048576 # (>= 17)
 # - Kernel Resources -
 
 postgresql_max_files_per_process: 1000  # min 25, (>= 13) min 64
@@ -246,12 +257,13 @@ postgresql_bgwriter_flush_after:    512kB  # measured in pages, 0 disables
 postgresql_backend_flush_after:              0   # (>= 9.6) 0 disables, default is 0
 postgresql_effective_io_concurrency:         1   # 1-1000; 0 disables prefetching
 postgresql_maintenance_io_concurrency:       10  # (>= 13)
+postgresql_io_combine_limit:                 128kB # (>= 17) usually 1-32 blocks (depends on OS)
 postgresql_max_worker_processes:             8   # (change requires restart)
 postgresql_max_parallel_workers_per_gather:  2   # (>= 9.6) taken from max_worker_processes
 postgresql_max_parallel_maintenance_workers: 2   # (>= 11) taken from max_parallel_workers
 postgresql_max_parallel_workers:             8   # (>= 10)
 postgresql_parallel_leader_participation:    on  # (>= 11)
-postgresql_old_snapshot_threshold:           -1  # (>= 9.6) 1min-60d; -1 disables; 0 is immediate
+postgresql_old_snapshot_threshold:           -1  # (>= 9.6 < 17) 1min-60d; -1 disables; 0 is immediate
                                                  # (change requires restart)
 
 #------------------------------------------------------------------------------
@@ -321,6 +333,9 @@ postgresql_recovery_target_inclusive: ""           # (>= 12)
 postgresql_recovery_target_timeline: "latest"      # (>= 12)
 postgresql_recovery_target_action: "pause"         # (>= 12)
 
+postgresql_summarize_wal: off           # (>= 17)run WAL summarizer process?
+postgresql_wal_summary_keep_time: '10d' # (>= 17) when to remove old summary files, 0 = never
+
 #------------------------------------------------------------------------------
 # REPLICATION
 #------------------------------------------------------------------------------
@@ -342,10 +357,10 @@ postgresql_track_commit_timestamp: off # (>= 9.5)
 # standby servers that provide sync rep.
 # number of sync standbys (>= 9.6) and comma-separated list of application_name from standby(s)
 postgresql_synchronous_standby_names: [] # '*' means 'all'
+postgresql_synchronized_standby_slots: 0 # (>= 17) streaming replication standby server slot names that logical walsender processes will wait for
 postgresql_synchronous_standby_num_sync: "" # >= 9.6 (NOTE: If you use the ANY/ALL syntax in v10, then note the new variable below)
 postgresql_synchronous_standby_choose_sync: "FIRST" # >= 10
-# number of xacts by which cleanup is delayed
-postgresql_vacuum_defer_cleanup_age: 0 # (<= 15)
+postgresql_vacuum_defer_cleanup_age: 0 # (<= 15) number of xacts by which cleanup is delayed
 
 # - Standby Servers -
 # These settings are ignored on a primary server.
@@ -365,14 +380,13 @@ postgresql_wal_receiver_status_interval: 10s # 0 disables
 postgresql_hot_standby_feedback: off
 #time that receiver waits for communication from master in milliseconds
 postgresql_wal_receiver_timeout: 60s
-# time to wait before retrying to retrieve WAL after a failed attempt
-postgresql_wal_retrieve_retry_interval: 5s # (>= 9.5)
+postgresql_wal_retrieve_retry_interval: 5s # (>= 9.5) time to wait before retrying to retrieve WAL after a failed attempt
 postgresql_recovery_min_apply_delay: 0             # (>= 12)
+postgresql_sync_replication_slots: off    # (>= 17) enables slot synchronization on the physical standby from the primary
 
 # - Subscribers - (>= 10)
 # These settings are ignored on a publisher.
-postgresql_max_logical_replication_workers: 4   # (>= 10) taken from max_worker_processes
-            # (change requires restart)
+postgresql_max_logical_replication_workers: 4   # (>= 10) taken from max_worker_processes (change requires restart)
 postgresql_max_sync_workers_per_subscription: 2 # (>= 10) taken from max_logical_replication_workers
 postgresql_max_parallel_apply_workers_per_subscription: 2 # (>= 16) taken from max_logical_replication_workers
 
@@ -397,10 +411,12 @@ postgresql_enable_parallel_hash:           on    # (>= 11)
 postgresql_enable_partition_pruning:       on    # (>= 11)
 postgresql_enable_partitionwise_join:      off   # (>= 11)
 postgresql_enable_partitionwise_aggregate: off   # (>= 11)
-postgres_enable_presorted_aggregate:       on    # (>= 16)
+postgresql_enable_presorted_aggregate:     on    # (>= 16)
 postgresql_enable_seqscan:                 on
 postgresql_enable_sort:                    on
 postgresql_enable_tidscan:                 on
+postgresql_enable_group_by_reordering:     on    # (>=17)
+postgresql_enable_distinct_reordering:     on    # (>=17)
 
 # - Planner Cost Constants -
 postgresql_seq_page_cost:              1.0     # measured on an arbitrary scale
@@ -608,6 +624,7 @@ postgresql_autovacuum: on
 # -1 disables, 0 logs all actions and their durations, > 0 logs only
 # actions running at least this number of milliseconds.
 # max number of autovacuum subprocesses
+postgresql_autovacuum_worker_slots: 16  # (>= 17) autovacuum worker slots to allocate (change requires restart)
 postgresql_autovacuum_max_workers: 3
 # time between autovacuum runs
 postgresql_autovacuum_naptime: 1min
@@ -665,21 +682,23 @@ postgresql_default_transaction_deferrable: off
 postgresql_session_replication_role:       "origin"
 
 postgresql_statement_timeout:                     0           # in milliseconds, 0 is disabled
+postgresql_transaction_timeout:                   0           # (>= 17)
 postgresql_lock_timeout:                          0           # in milliseconds, 0 is disabled (>= 9.3)
 postgresql_idle_in_transaction_session_timeout:   0           # in milliseconds, 0 is disabled (>= 9.6)
 postgresql_idle_session_timeout:                  0           # in milliseconds, 0 is disabled (>= 14)
-postgresql_vacuum_freeze_table_age:               150000000
-postgresql_vacuum_freeze_min_age:                 50000000
-postgresql_vacuum_failsafe_age:                   1600000000  # (>= 14)
-postgresql_vacuum_multixact_freeze_table_age:     150000000   # (>= 9.3)
-postgresql_vacuum_multixact_freeze_min_age:       5000000     # (>= 9.3)
-postgresql_vacuum_multixact_failsafe_age:         1600000000  # (>= 14)
+postgresql_vacuum_freeze_table_age:               150000000   # (<= 16)
+postgresql_vacuum_freeze_min_age:                 50000000    # (<= 16)
+postgresql_vacuum_failsafe_age:                   1600000000  # (>= 14 <= 16)
+postgresql_vacuum_multixact_freeze_table_age:     150000000   # (>= 9.3 <= 16)
+postgresql_vacuum_multixact_freeze_min_age:       5000000     # (>= 9.3 <= 16)
+postgresql_vacuum_multixact_failsafe_age:         1600000000  # (>= 14 <= 16)
 postgresql_vacuum_cleanup_index_scale_factor:     0.1         # (>= 11 and <= 13)
 postgresql_bytea_output: "hex"  # hex, escape
 postgresql_xmlbinary:    "base64"
 postgresql_xmloption:    "content"
 postgresql_gin_pending_list_limit: 4MB  # (>= 9.5)
 postgresql_createrole_self_grant: '' # (>= 16) 'set', 'inherit' or 'set, inherit'
+postgresql_event_triggers: on # (>=17)
 
 # - Locale and Formatting -
 
@@ -726,7 +745,7 @@ postgresql_jit_provider: "llvmjit" # (>= 11)
 # - Other Defaults -
 
 postgresql_dynamic_library_path: "$libdir"
-postgresql_extension_destdir: ""  # prepend path when loading extensions
+postgresql_extension_destdir: ""  # (<=16) prepend path when loading extensions
                                   # and shared objects (added by Debian)
 
 postgresql_gin_fuzzy_search_limit: 0
@@ -768,7 +787,7 @@ postgresql_sql_inheritance:             on # (<= 9.6)
 # - Other Platforms and Clients -
 
 postgresql_transform_null_equals:       off
-
+postgresql_allow_alter_system:          on # (>=17)
 #------------------------------------------------------------------------------
 # ERROR HANDLING
 #------------------------------------------------------------------------------
